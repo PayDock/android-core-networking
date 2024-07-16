@@ -1,0 +1,35 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:android) # Or :android, depending on your primary platform
+
+platform :android do
+  desc "Runs all the Android tests"
+  lane :testAndroid do
+    gradle(task: "clean")
+    gradle(task: ":network:testDebugUnitTest") # Run Android unit tests
+  end
+end
+
+platform :ios do
+  desc "Runs all the iOS tests"
+   lane :testIOS do
+       gradle(task: "clean")
+       gradle(task: ":network:iosSimulatorArm64Test") # Run iOS unit tests
+     end
+end
+
+
+
