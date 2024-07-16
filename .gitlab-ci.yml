@@ -1,0 +1,41 @@
+image: mingc/android-build-box:latest
+
+variables:
+  ANDROID_COMPILE_SDK: "34"
+  ANDROID_BUILD_TOOLS: "34.0.4"
+  ANDROID_SDK_TOOLS: "9477386"
+
+stages:
+  - .pre
+  - test-ios
+  - test-android
+  - security
+  - security-post
+
+include:
+  - project: 'paydock/platform/gitlab-templates'
+    ref: main
+    file: '/security/gitlab-defectdojo.yaml'
+
+test_iOS:
+  stage: test-ios
+  before_script:
+    - gem install bundler -v 1.17.2
+    - bundle update
+  script:
+    - bundle exec fastlane ios testIOS
+  artifacts:
+    reports:
+      junit: build/test-results/iosSimulatorArm64Test/TEST-*.xml
+
+test_Android:
+  stage: test-android
+  before_script:
+    - gem install bundler -v 1.17.2
+    - bundle update
+  script:
+    - bundle exec fastlane android testAndroid
+  artifacts:
+    when: always
+    reports:
+      junit: build/test-results/testDebugUnitTest/TEST-*.xml
