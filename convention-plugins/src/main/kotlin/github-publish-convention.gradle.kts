@@ -18,17 +18,17 @@ if (secretPropsFile.exists()) {
     }
 } else {
     ext["username"] = System.getenv("GITHUB_USERNAME")
-    ext["token"] = System.getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
+    ext["token"] = System.getenv("GITHUB_TOKEN")
 }
 
 publishing {
     repositories {
         maven {
-            // https://github.com/PayDock/android-mobile-sdk
+            // https://github.com/PayDock/android-core-networking
             name = "GitHubPackages"
             // https://maven.pkg.github.com/{repository owner}/{repository}
             // url = uri("https://maven.pkg.github.com/GITHUB_USERID/REPOSITORY")
-            url = uri("https://maven.pkg.github.com/Paydock/android-mobile-sdk")
+            url = uri("https://maven.pkg.github.com/Paydock/android-core-networking")
             // Private Access Token - linked to a specific account (Paste token as-is, or define an environment variable to hold the token)
             credentials {
                 username = getExtraString("username")

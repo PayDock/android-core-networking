@@ -1,3 +1,5 @@
+[![](https://www.jitpack.io/v/PayDock/android-core-networking.svg)](https://www.jitpack.io/#PayDock/android-core-networking)
+
 # Network Module for Kotlin Multiplatform (KMP)
 
 A versatile and robust networking module for Kotlin Multiplatform (KMP) projects, utilizing Ktor with platform-specific engines. This module supports dynamic HTTP client engine creation, including success and failure mock engines, interceptor-based OkHttp for Android, and SSL pinning configurations. It ensures seamless integration and consistent networking functionality across Android and iOS, making it ideal for both production and testing environments.
@@ -36,11 +38,33 @@ A versatile and robust networking module for Kotlin Multiplatform (KMP) projects
    }
    ```
 
+### Adding the library using Jitpack (Recommended)
+
+1. Add the Jitpack repository to your `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        ...
+       maven { setUrl("https://www.jitpack.io") }
+    }
+}
+```
+
+2. Add the dependency to your app's `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    // Replace <version> with the appropriate version of the library you want to use.
+   implementation("com.github.PayDock.android-core-networking:network:<version>")
+}
+```
+
 ### Adding the library as a Dependency
 
 1. Add the maven credentials for the Github package info to your settings.gradle.
 
-   ```groovy
+   ```kotlin
    dependencyResolutionManagement {
        maven {
            name = "GitHubPackages"
