@@ -77,13 +77,15 @@ internal class IOSNetworkClientBuilder : NetworkClientBuilder() {
      * @return The configured [HttpClientEngine] instance.
      */
     private fun createHttpEngine(config: NetworkConfig): HttpClientEngine {
-        val certificatePinner = CertificatePinner.Builder().apply {
-            config.sslPins.forEach { pin ->
-                add(config.baseUrl, pin)
-            }
-        }.build()
+        val certificatePinner: CertificatePinner? = config.sslPins?.let {
+            CertificatePinner.Builder().apply {
+                config.sslPins.forEach { pin ->
+                    add(config.baseUrl, pin)
+                }
+            }.build()
+        }
         return Darwin.create {
-            handleChallenge(certificatePinner)
+            certificatePinner?.let { handleChallenge(it) }
             configureSession {
                 timeoutIntervalForRequest = config.requestTimeout
                 timeoutIntervalForResource = config.responseTimeout
