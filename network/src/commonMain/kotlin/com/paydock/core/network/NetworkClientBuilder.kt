@@ -16,7 +16,7 @@ import kotlinx.serialization.json.Json
 abstract class NetworkClientBuilder {
     // Common network configuration properties
     protected var baseUrl: String? = null
-    protected var sslPins: List<String> = listOf()
+    protected var sslPins: List<String>? = null
     protected var isDebug: Boolean = false
     protected var requestTimeout: Double = 60.0
     protected var responseTimeout: Double = 60.0
