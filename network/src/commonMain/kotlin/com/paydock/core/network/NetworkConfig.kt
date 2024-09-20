@@ -15,7 +15,7 @@ import io.ktor.http.URLProtocol
  */
 internal data class NetworkConfig(
     val baseUrl: String,
-    val sslPins: List<String>,
+    val sslPins: List<String>?,
     val isDebug: Boolean,
     val protocol: URLProtocol,
     val requestTimeout: Double,
