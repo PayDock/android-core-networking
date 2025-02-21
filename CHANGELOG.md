@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.0] - 2025-02-21
+
+### Changed
+- Updated gradle and dependency versions
+
 ## [1.1.0] - 2024-10-20
 
 ### Changed
