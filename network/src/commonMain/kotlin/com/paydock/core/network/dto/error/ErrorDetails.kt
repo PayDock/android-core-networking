@@ -1,5 +1,6 @@
 package com.paydock.core.network.dto.error
 
+import com.paydock.core.network.utils.ErrorMessageListSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -20,9 +21,9 @@ data class ErrorDetails(
     @SerialName("gateway_specific_code") val gatewaySpecificCode: String? = null,
     @SerialName("gateway_specific_description") val gatewaySpecificDescription: String? = null,
     @SerialName("param_name") val paramName: String? = null,
-    @SerialName("description") val description: String? = null,
-    @SerialName("path") val path: String? = null,
-    @SerialName("messages") val messages: List<String>? = null,
+    val description: String? = null,
+    val path: String? = null,
+    @Serializable(with = ErrorMessageListSerializer::class) val messages: List<ErrorMessage>? = null,
     @SerialName("status_code") val statusCode: String? = null,
     @SerialName("status_code_description") val statusCodeDescription: String? = null
 )
