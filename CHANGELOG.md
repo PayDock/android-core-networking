@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0] - 2025-03-25
+
+# Added
+- `HttpRequestRetry` configuration to Http Engines
+- Configuration for retry logic ie. `maxRetries` & `retryInterval`
+- Additional error details message list mappings
+- Custom serialization for `ErrorMessage` types
+
+### Changed
+- Renamed `UnknownApiException` to `ApiParseException`
+- Error details to use generic type `ErrorMessage` for `messages`
+
 ## [1.2.0] - 2025-02-21
 
 ### Changed

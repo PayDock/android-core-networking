@@ -1,18 +1,13 @@
 package com.paydock.core.network.interceptor
 
 import com.paydock.core.network.dto.error.toApiError
-import com.paydock.core.network.exceptions.ApiException
-import com.paydock.core.network.exceptions.UnknownApiException
+import com.paydock.core.network.exceptions.ApiParseException
 import com.paydock.core.network.extensions.convertToApiErrorResponse
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 
-/**
- * Intercepts API errors and converts them into [ApiException] by decoding the Error response body.
- * In case serialization fails, the response will be delivered as is.
- */
 internal class ApiErrorInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -35,7 +30,7 @@ internal class ApiErrorInterceptor : Interceptor {
             // Process the error data class accordingly and throw the appropriate ApiException
             throw when {
                 apiErrorResponse != null -> apiErrorResponse.toApiError()
-                else -> UnknownApiException(status = response.code, errorBody = errorBody)
+                else -> ApiParseException(status = response.code, errorBody = errorBody)
             }
         } else {
             // Your existing error handling logic if deserialization fails

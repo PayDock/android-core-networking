@@ -4,36 +4,55 @@ image: mingc/android-build-box:latest # Sets the latest version of the image
 # Alternative is to set a specific version: https://hub.docker.com/r/mingc/android-build-box/tags
 #image: mingc/android-build-box:1.28.0
 
+# Variables:
+# These variables define the Android SDK versions used for building the project.
 variables:
+  # ANDROID_COMPILE_SDK is the version of Android you're compiling with.
+  # It should match compileSdkVersion.
   ANDROID_COMPILE_SDK: "34"
+  # ANDROID_BUILD_TOOLS is the version of the Android build tools you are using.
+  # It should match buildToolsVersion. See: SDK Manager > BuildTools
   ANDROID_BUILD_TOOLS: "34.0.4"
+  # It's what version of the command line tools we're going to download from the official site.
+  # Official Site-> https://developer.android.com/studio/index.html
+  # There, look down below at the cli tools only, sdk tools package is of format:
+  #        commandlinetools-os_type-ANDROID_SDK_TOOLS_latest.zip
+  # when the script was last modified for latest compileSdkVersion, it was which is written down below
   ANDROID_SDK_TOOLS: "9477386"
 
+# Stages:
+# Defines the stages of the pipeline. Jobs within the same stage run in parallel.
+# Jobs in subsequent stages run after the previous stage has completed successfully.
 stages:
-  - quality
-  - test
-  - test-ios
-  - test-android
-  - tag
-  - gitlab_release
-  - github_release
-  - publish
+  - quality # Stage for code quality checks (e.g., linting, static analysis).
+  - test # Stage required for sast job.
+  - test-ios # Stage for running unit and integration tests for ios platform.
+  - test-android # Stage for running unit and integration tests for android platform.
+  - tag # Stage for tagging a release.
+  - gitlab_release # Stage for creating a release in GitLab.
+  - github_release # Stage for creating a release in GitHub.
+  - publish # Stage for publishing the SDK to GitHub.
 
+# Include:
+# Includes an external template for security checks from another project.
+# This template is located in the 'paydock/platform/gitlab-templates' project.
 include:
   - project: 'paydock/platform/gitlab-templates'
     ref: main
-    file: '/security/gitlab-defectdojo.yaml'
+    file: '/security/gitlab-defectdojo.yaml' # Includes security checks from the DefectDojo template.
 
-# Improved: Use 'extends' for DRY principle
+# .setup_bundler:
+# This is a hidden job template that sets up the Ruby Bundler environment.
+# It is used by other jobs to ensure they have the necessary Ruby dependencies.
 .setup_bundler:
   cache:
     paths:
-      - vendor/bundle
+      - vendor/bundle # Caches the Ruby dependencies to speed up subsequent runs.
   before_script:
     - gem install bundler -v 1.17.2
     - bundle update
   script:
-    - bundle --version
+    - bundle --version # Checks the version of Bundler.
 
 test_iOS:
   stage: test-ios
@@ -54,43 +73,65 @@ test_Android:
     reports:
       junit: build/test-results/testDebugUnitTest/TEST-*.xml
 
+# tag_release:
+# This job tags a release in the repository.
 tag_release:
-  stage: tag
-  extends: .setup_bundler  # Apply the shared setup
+  stage: tag # Runs in the 'tag' stage.
+  extends: .setup_bundler # Extends the '.setup_bundler' template.
   only:
-    - release
+    - release # Only runs when a commit is made to the 'release' branch.
   script:
-    - bundle exec fastlane tag_release
+    - bundle exec fastlane tag_release # Executes the 'tag_release' lane in the Fastfile.
+    # Fastfile Reference: This lane is defined in the Fastfile and handles the tagging process.
 
+# create_gitlab_release:
+# This job creates a release in GitLab.
 create_gitlab_release:
-  stage: gitlab_release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  rules:
-    - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_NAME == "release"'
+  stage: gitlab_release # Runs in the 'gitlab_release' stage.
+  extends: .setup_bundler # Extends the '.setup_bundler' template to set up the Ruby environment.
+  dependencies:
+    - tag_release
+  only:
+    - release # Only runs when a commit is made to the 'release' branch.
   script:
-    - echo "running release_job for $TAG"
-  release:
-    name: 'Release: v${CI_COMMIT_TAG}'
-    description: '$CI_COMMIT_TAG'
-    tag_name: '$CI_COMMIT_TAG'
-    ref: '$CI_COMMIT_SHA'
-    assets:
-      links:
-        - name: 'MobileSDK Documentation'
-          url: 'https://github.com/PayDock/mobile-sdk-doc/tree/main'
+    - bundle exec fastlane create_gitlab_release version:$CI_COMMIT_TAG # Executes the 'create_gitlab_release' lane in the Fastfile.
+    # Fastfile Reference: This lane is defined in the Fastfile and handles the following:
+    #   - Authenticating with GitHub using a personal access token.
+    #   - Creating a new release on Gitlab with the specified tag name.
+    #   - Adding release notes or a description to the release.
+    #   - Potentially uploading release assets (e.g., APKs) to the release.
 
+# create_github_release:
+# This job creates a release in GitHub.
+# It is triggered when a new tag is pushed to the 'release' branch.
+# This job uses Fastlane to interact with the GitHub API.
 create_github_release:
-  stage: github_release
-  extends: .setup_bundler  # Apply the shared setup
+  stage: github_release # Runs in the 'github_release' stage.
+  extends: .setup_bundler # Extends the '.setup_bundler' template to set up the Ruby environment.
+  dependencies:
+    - tag_release
   only:
-    - release
+    - release # Only runs when a commit is made to the 'release' branch.
   script:
-    - bundle exec fastlane create_github_release
+    - bundle exec fastlane create_github_release$CI_COMMIT_TAG # Executes the 'create_github_release' lane in the Fastfile.
+    # Fastfile Reference: This lane is defined in the Fastfile and handles the following:
+    #   - Authenticating with GitHub using a personal access token.
+    #   - Creating a new release on GitHub with the specified tag name.
+    #   - Adding release notes or a description to the release.
+    #   - Potentially uploading release assets (e.g., APKs) to the release.
 
+# publish_to_github:
+# This job publishes the built SDK to GitHub.
+# It is triggered when a new tag is pushed to the 'release' branch.
+# This job uses Fastlane to interact with the GitHub API.
 publish_to_github:
-  stage: publish
-  extends: .setup_bundler  # Apply the shared setup
+  stage: publish # Runs in the 'publish' stage.
+  extends: .setup_bundler # Extends the '.setup_bundler' template to set up the Ruby environment.
   only:
-    - release
+    - release # Only runs when a commit is made to the 'release' branch.
   script:
-    - bundle exec fastlane publish_to_github
+    - bundle exec fastlane publish_to_github # Executes the 'publish_to_github' lane in the Fastfile.
+    # Fastfile Reference: This lane is defined in the Fastfile and handles the following:
+    #   - Authenticating with GitHub using a personal access token.
+    #   - Uploading the built SDK (e.g., AAR file) as a release asset to the GitHub release.
+    #   - Potentially updating the release notes or description.
