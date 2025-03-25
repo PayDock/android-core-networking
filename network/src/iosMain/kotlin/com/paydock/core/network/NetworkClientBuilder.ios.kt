@@ -2,6 +2,7 @@
 package com.paydock.core.network
 
 import com.paydock.core.network.dto.error.toApiError
+import com.paydock.core.network.exceptions.ApiException
 import com.paydock.core.network.exceptions.UnknownApiException
 import com.paydock.core.network.extensions.convertToApiErrorResponse
 import io.ktor.client.HttpClient
@@ -9,6 +10,7 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.engine.darwin.certificates.CertificatePinner
+import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.DEFAULT
@@ -31,8 +33,18 @@ internal class IOSNetworkClientBuilder : NetworkClientBuilder() {
      * @throws IllegalArgumentException if the base URL is not set.
      */
     override fun build(): HttpClient {
-        requireNotNull(baseUrl) { "Base URL must be set" }
-        val config = NetworkConfig(baseUrl!!, sslPins, isDebug, protocol, requestTimeout, responseTimeout)
+        require(!baseUrl.isNullOrBlank()) { "Base URL must be set" }
+        val config =
+            NetworkConfig(
+                baseUrl!!,
+                sslPins,
+                protocol,
+                requestTimeout,
+                responseTimeout,
+                maxRetries,
+                retryInterval,
+                isDebug
+            )
 
         val engine = mockEngine ?: createHttpEngine(config)
         return HttpClient(engine) {
@@ -57,6 +69,22 @@ internal class IOSNetworkClientBuilder : NetworkClientBuilder() {
                         }
                     } else {
                         throw UnknownApiException(status = response.status.value, errorBody = errorBody)
+                    }
+                }
+            }
+            // Only add retry logic if maxRetries is greater than 0
+            if (config.maxRetries > 0) {
+                install(HttpRequestRetry) {
+                    maxRetries = config.maxRetries
+                    retryOnServerErrors(maxRetries = config.maxRetries)
+                    retryIf { _, response -> !response.status.isSuccess() }
+                    retryOnExceptionIf { _, cause -> cause is ApiException }
+                    delayMillis { retry -> retry * config.retryInterval }
+                    modifyRequest { request ->
+                        request.headers.append(
+                            "x-retry-count",
+                            retryCount.toString()
+                        )
                     }
                 }
             }

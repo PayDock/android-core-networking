@@ -1,10 +1,12 @@
 @file:Suppress("MatchingDeclarationName")
 package com.paydock.core.network
 
+import com.paydock.core.network.exceptions.ApiException
 import com.paydock.core.network.interceptor.ApiErrorInterceptor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.DEFAULT
@@ -13,6 +15,7 @@ import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import okhttp3.CertificatePinner
 import okhttp3.Interceptor
@@ -43,9 +46,20 @@ internal class AndroidNetworkClientBuilder : NetworkClientBuilder() {
      * @return The configured [HttpClient] instance.
      * @throws IllegalArgumentException if the base URL is not set.
      */
+    @Suppress("MagicNumber")
     override fun build(): HttpClient {
-        requireNotNull(baseUrl) { "Base URL must be set" }
-        val config = NetworkConfig(baseUrl!!, sslPins, isDebug, protocol, requestTimeout, responseTimeout)
+        require(!baseUrl.isNullOrBlank()) { "Base URL must be set" }
+        val config =
+            NetworkConfig(
+                baseUrl!!,
+                sslPins,
+                protocol,
+                requestTimeout,
+                responseTimeout,
+                maxRetries,
+                retryInterval,
+                isDebug
+            )
 
         val engine = mockEngine ?: createHttpEngine(config)
         return HttpClient(engine) {
@@ -60,6 +74,22 @@ internal class AndroidNetworkClientBuilder : NetworkClientBuilder() {
             }
             install(ContentNegotiation) {
                 json(getNetworkJson())
+            }
+            // Only add retry logic if maxRetries is greater than 0
+            if (config.maxRetries > 0) {
+                install(HttpRequestRetry) {
+                    maxRetries = config.maxRetries
+                    retryOnServerErrors(maxRetries = config.maxRetries)
+                    retryIf { _, response -> !response.status.isSuccess() }
+                    retryOnExceptionIf { _, cause -> cause is ApiException }
+                    delayMillis { retry -> retry * config.retryInterval }
+                    modifyRequest { request ->
+                        request.headers.append(
+                            "x-retry-count",
+                            retryCount.toString()
+                        )
+                    }
+                }
             }
             install(Logging) {
                 logger = Logger.DEFAULT
