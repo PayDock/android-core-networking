@@ -3,7 +3,7 @@ package com.paydock.core.network
 
 import com.paydock.core.network.dto.error.toApiError
 import com.paydock.core.network.exceptions.ApiException
-import com.paydock.core.network.exceptions.UnknownApiException
+import com.paydock.core.network.exceptions.ApiParseException
 import com.paydock.core.network.extensions.convertToApiErrorResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -65,10 +65,10 @@ internal class IOSNetworkClientBuilder : NetworkClientBuilder() {
                         // Process the error data class accordingly and throw the appropriate ApiException
                         throw when {
                             apiErrorResponse != null -> apiErrorResponse.toApiError()
-                            else -> UnknownApiException(status = response.status.value, errorBody = errorBody)
+                            else -> ApiParseException(status = response.status.value, errorBody = errorBody)
                         }
                     } else {
-                        throw UnknownApiException(status = response.status.value, errorBody = errorBody)
+                        throw ApiParseException(status = response.status.value, errorBody = errorBody)
                     }
                 }
             }

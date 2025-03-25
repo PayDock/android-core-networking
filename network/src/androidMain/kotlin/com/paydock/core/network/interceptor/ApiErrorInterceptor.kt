@@ -1,7 +1,7 @@
 package com.paydock.core.network.interceptor
 
 import com.paydock.core.network.dto.error.toApiError
-import com.paydock.core.network.exceptions.UnknownApiException
+import com.paydock.core.network.exceptions.ApiParseException
 import com.paydock.core.network.extensions.convertToApiErrorResponse
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -30,7 +30,7 @@ internal class ApiErrorInterceptor : Interceptor {
             // Process the error data class accordingly and throw the appropriate ApiException
             throw when {
                 apiErrorResponse != null -> apiErrorResponse.toApiError()
-                else -> UnknownApiException(status = response.code, errorBody = errorBody)
+                else -> ApiParseException(status = response.code, errorBody = errorBody)
             }
         } else {
             // Your existing error handling logic if deserialization fails
