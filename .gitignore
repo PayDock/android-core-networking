@@ -72,3 +72,6 @@ vcs.xml
 
 # MacOS
 .DS_Store
+
+# Code Quality Reports
+reports/

@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
     spec.name                     = 'network'
-    spec.version                  = '1.0.0'
+    spec.version                  = '1.4.0'
     spec.homepage                 = 'https://github.com/PayDock/ios-mobile-sdk'
     spec.source                   = { :http=> ''}
     spec.authors                  = ''
@@ -8,7 +8,7 @@ Pod::Spec.new do |spec|
     spec.summary                  = 'A versatile and robust networking module for Kotlin Multiplatform (KMP) projects, utilizing Ktor with platform-specific engines. Supports dynamic HTTP client engine creation, including success and failure mock engines, interceptor-based OkHttp for Android, and SSL pinning configurations. This library ensures seamless integration and consistent networking functionality across Android and iOS, making it ideal for both production and testing environments.'
     spec.vendored_frameworks      = 'build/cocoapods/framework/network.framework'
     spec.libraries                = 'c++'
-    spec.ios.deployment_target    = '16.0'
+    spec.ios.deployment_target    = '18.0'
                 
                 
     if !Dir.exist?('build/cocoapods/framework/network.framework') || Dir.empty?('build/cocoapods/framework/network.framework')

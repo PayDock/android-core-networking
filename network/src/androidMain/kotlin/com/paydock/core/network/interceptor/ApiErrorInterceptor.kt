@@ -33,9 +33,9 @@ internal class ApiErrorInterceptor : Interceptor {
                 else -> ApiParseException(status = response.code, errorBody = errorBody)
             }
         } else {
-            // Your existing error handling logic if deserialization fails
-            val newErrorBody = errorBody?.toResponseBody("application/json".toMediaType())
-            return response.newBuilder().body(newErrorBody).build()
+            // Handle case where errorBody is null or blank - create empty error response
+            val defaultErrorBody = "{}".toResponseBody("application/json".toMediaType())
+            return response.newBuilder().body(defaultErrorBody).build()
         }
     }
 }
