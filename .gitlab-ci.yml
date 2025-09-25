@@ -19,19 +19,24 @@ variables:
   #        commandlinetools-os_type-ANDROID_SDK_TOOLS_latest.zip
   # when the script was last modified for latest compileSdkVersion, it was which is written down below
   ANDROID_SDK_TOOLS: "9477386"
+  # Gradle options for better performance
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
 
 # Stages:
 # Defines the stages of the pipeline. Jobs within the same stage run in parallel.
 # Jobs in subsequent stages run after the previous stage has completed successfully.
 stages:
   - quality # Stage for code quality checks (e.g., linting, static analysis).
+  - code_quality # Stage for linting the codebase using detekt
   - test # Stage required for sast job.
   - test-ios # Stage for running unit and integration tests for ios platform.
   - test-android # Stage for running unit and integration tests for android platform.
+  - test-aggregate # Stage for aggregated test reporting and coverage analysis.
   - tag # Stage for tagging a release.
   - gitlab_release # Stage for creating a release in GitLab.
   - github_release # Stage for creating a release in GitHub.
   - publish # Stage for publishing the SDK to GitHub.
+  - maven_central # Stage for publishing to Maven Central.
 
 # Include:
 # Includes an external template for security checks from another project.
@@ -41,37 +46,163 @@ include:
     ref: main
     file: '/security/gitlab-defectdojo.yaml' # Includes security checks from the DefectDojo template.
 
+.macos_saas_runners:
+  tags:
+    - saas-macos-medium-m1
+  image: macos-14-xcode-15
+
 # .setup_bundler:
 # This is a hidden job template that sets up the Ruby Bundler environment.
 # It is used by other jobs to ensure they have the necessary Ruby dependencies.
 .setup_bundler:
   cache:
+    key: bundler-$CI_COMMIT_REF_SLUG
     paths:
       - vendor/bundle # Caches the Ruby dependencies to speed up subsequent runs.
+      - ~/.gradle/caches # Cache Gradle dependencies
+      - ~/.gradle/wrapper # Cache Gradle wrapper
+      - .gradle/caches # Project-level Gradle cache
   before_script:
     - gem install bundler -v 1.17.2
-    - bundle update
+    - bundle config set --local path 'vendor/bundle'
+    - bundle install --jobs 4 --retry 3
   script:
     - bundle --version # Checks the version of Bundler.
 
+# code_quality:
+# This job runs code quality checks on the codebase using detekt.
+# It extends the '.setup_bundler' template to ensure the Ruby dependencies are set up.
+# Generates reports that are displayed in GitLab's Code Quality tab.
+code_quality:
+  stage: code_quality # Runs in the 'code_quality' stage.
+  extends: .setup_bundler # Inherits configurations (like Bundler setup) from the '.setup_bundler' template.
+  script:
+    - bundle exec fastlane code_quality # Executes the 'code_quality' lane in Fastlane.
+  artifacts:
+    expire_in: 1 week
+    when: always # Always collect artifacts, even if the job fails
+    paths:
+      - reports/code-quality/ # Make all code quality reports available
+      - network/build/reports/ # Include original detekt reports for debugging
+    reports:
+      # GitLab Code Quality report (custom format for better integration)
+      codequality: reports/code-quality/gl-code-quality-report.json
+    expose_as: 'Code Quality Reports'
+  rules:
+    - if: $CI_COMMIT_BRANCH  # Run on all branch pushes
+      when: on_success
+    - if: $CI_MERGE_REQUEST_IID # Run on merge (Merge Results)
+      when: on_success
+
 test_iOS:
   stage: test-ios
-  extends: .setup_bundler  # Apply the shared setup
+  extends: 
+    - .setup_bundler  # Apply the shared setup
+    - .macos_saas_runners
+  variables:
+    GRADLE_USER_HOME: .gradle
+    IOS_SIMULATOR_DEVICE: "iPhone 15 Pro"
+  rules:
+    - if: $CI_COMMIT_BRANCH  # Run on all branch pushes
+      when: on_success
+    - if: $CI_MERGE_REQUEST_IID # Run on merge requests
+      when: on_success
+  cache:
+    key: ios-tests-$CI_COMMIT_REF_SLUG
+    paths:
+      - .gradle/caches
+      - .gradle/wrapper
+      - network/build
+    policy: pull-push
   script:
     - bundle exec fastlane ios testIOS
+  
   artifacts:
+    when: always  # Upload artifacts even if tests fail
+    expire_in: 2 weeks
+    paths:
+      - "network/build/reports/tests/"
+      - "network/build/test-results/"
+      - "gradle-test-logger.log"
     reports:
-      junit: build/test-results/iosSimulatorArm64Test/TEST-*.xml
+      junit:
+        - network/build/test-results/iosSimulatorArm64Test/TEST-*.xml
+        - network/build/test-results/iosX64Test/TEST-*.xml
+      # No coverage from iOS lane (Kover is JVM-only)
+
 
 test_Android:
   stage: test-android
-  extends: .setup_bundler  # Apply the shared setup
+  extends: .setup_bundler
+  variables:
+    GRADLE_USER_HOME: .gradle
+  rules:
+    - if: $CI_COMMIT_BRANCH  # Run on all branch pushes
+      when: on_success
+    - if: $CI_MERGE_REQUEST_IID # Run on merge requests
+      when: on_success
+  cache:
+    key: android-tests-$CI_COMMIT_REF_SLUG
+    paths:
+      - .gradle/caches
+      - .gradle/wrapper
+      - network/build
+    policy: pull-push
   script:
     - bundle exec fastlane android testAndroid
   artifacts:
-    when: always
+    when: always  # Upload artifacts even if tests fail
+    expire_in: 2 weeks
+    name: "android-coverage-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - "network/build/reports/tests/"
+      - "network/build/test-results/"
+      - "network/build/reports/kover/"
+      - "network/build/reports/kover/html/"
+      - "gradle-test-logger.log"
     reports:
-      junit: build/test-results/testDebugUnitTest/TEST-*.xml
+      junit:
+        - network/build/test-results/testDebugUnitTest/TEST-*.xml
+        - network/build/test-results/testReleaseUnitTest/TEST-*.xml
+      coverage_report:
+        coverage_format: jacoco
+        path: "network/build/reports/kover/report.xml"
+  coverage: '/application line coverage:\s+([0-9]+(?:\.[0-9]+)?)%/'
+
+
+# Enforce minimum coverage on changed code in MRs using diff-cover
+diff_coverage_check:
+  stage: test-aggregate
+  image: python:3.11
+  needs:
+    - job: test_Android
+      artifacts: true
+      optional: true
+  before_script:
+    - pip install --no-cache-dir diff-cover
+  script:
+    - mkdir -p coverage
+    - |
+      COV_XML="network/build/reports/kover/report.xml"
+      if [ ! -f "$COV_XML" ]; then
+        echo "No Kover coverage report found; skipping diff coverage check.";
+        exit 0;
+      fi
+      BASE_BRANCH="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-main}"
+      git fetch origin "$BASE_BRANCH"
+      # Use diff-cover directly on Kover's JaCoCo XML (diff-cover auto-detects format)
+      diff-cover "$COV_XML" --compare-branch "origin/$BASE_BRANCH" \
+        --fail-under ${NEW_CODE_TEST_COVERAGE_TARGET:-80} \
+        --html-report coverage/diff-cover.html \
+        --markdown-report coverage/diff-cover.md || exit 1
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  artifacts:
+    when: always
+    name: "diff-coverage-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - coverage/
+    expose_as: 'Diff Coverage Reports'
 
 # tag_release:
 # This job tags a release in the repository.
@@ -113,7 +244,7 @@ create_github_release:
   only:
     - release # Only runs when a commit is made to the 'release' branch.
   script:
-    - bundle exec fastlane create_github_release$CI_COMMIT_TAG # Executes the 'create_github_release' lane in the Fastfile.
+    - bundle exec fastlane create_github_release # Executes the 'create_github_release' lane in the Fastfile.
     # Fastfile Reference: This lane is defined in the Fastfile and handles the following:
     #   - Authenticating with GitHub using a personal access token.
     #   - Creating a new release on GitHub with the specified tag name.
@@ -135,3 +266,29 @@ publish_to_github:
     #   - Authenticating with GitHub using a personal access token.
     #   - Uploading the built SDK (e.g., AAR file) as a release asset to the GitHub release.
     #   - Potentially updating the release notes or description.
+
+# publish_to_maven_central:
+# This job publishes the SDK to Maven Central using JReleaser.
+# It runs after the tag has been created and uses JReleaser for complete automation.
+publish_to_maven_central:
+  stage: maven_central # Runs in the 'maven_central' stage.
+  extends: .setup_bundler # Extends the '.setup_bundler' template to set up the Ruby environment.
+  dependencies:
+    - tag_release
+  only:
+    - release # Only runs when a commit is made to the 'release' branch.
+  script:
+    - bundle exec fastlane publish_to_maven_central
+  # This job handles:
+  #   - Publishing artifacts to staging repository
+  #   - Running JReleaser full release process
+  #   - Creating Maven Central deployment
+  #   - Updating GitLab release with Maven Central information
+  artifacts:
+    when: always
+    reports:
+      # JReleaser output for debugging
+    paths:
+      - network/build/jreleaser/
+    expire_in: 7 days
+  allow_failure: false

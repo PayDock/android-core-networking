@@ -1,6 +1,6 @@
 package com.paydock.core.network.exceptions
 
-import io.ktor.utils.io.errors.IOException
+import kotlinx.io.IOException
 
 /**
  * Represents an exception that occurs when parsing the API response fails.
