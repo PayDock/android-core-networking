@@ -245,13 +245,28 @@ lane :create_gitlab_release do |options|
         **Full Changelog:** [View on GitLab](https://gitlab.com/paydock/bounded-contexts/mobile/mobile-lib-networking-android/-/commits/#{version_tag})
     RELEASE
 
+    # Sanitize single quotes to avoid breaking single-quoted shell strings
+    release_description_safe = release_description.gsub("'", "'")
+
+    # Define the release assets.
+    # These are links to external resources related to the release.
+    release_assets = [
+        {
+            "name" => "Networking Documentation", # The name of the asset.
+            "url" => "https://github.com/PayDock/android-core-networking/tree/main" # The URL of the asset.
+        }
+    ]
+
     # Construct the release data payload.
     # This is the data that will be sent to the GitLab API to create the release.
     release_data = {
         "name" => release_name, # The name of the release.
         "tag_name" => version_tag, # The tag name of the release.
-        "description" => release_description, # The description of the release.
-        "ref" => version_tag # The reference (tag or branch) for the release.
+        "description" => release_description_safe, # The description of the release.
+        "ref" => version_tag, # The reference (tag or branch) for the release.
+        "assets" => { # The assets associated with the release.
+            "links" => release_assets # The links to the assets.
+        }
     }.to_json # Convert the data to JSON format.
 
     # Construct the correct API URL.
@@ -259,14 +274,18 @@ lane :create_gitlab_release do |options|
     api_url = "#{api_endpoint}/projects/#{project_id}/releases"
 
     # Create the release using the GitLab API. https://docs.gitlab.com/api/releases/
-    # This uses the 'curl' command to send a POST request to the GitLab API.
-    # --silent: Suppresses progress output.
-    # --header: Specifies the headers for the request (Content-Type and PRIVATE-TOKEN).
-    # --data: Specifies the data payload for the request (the release data in JSON format).
-    # --request POST: Specifies that this is a POST request.
-    response = sh("curl --silent --header 'Content-Type: application/json' --header 'PRIVATE-TOKEN: #{gitlab_token}' \
-        --data '#{release_data}' \
-        --request POST '#{api_url}'")
+    # Avoid shell quoting issues by writing JSON to a temp file and using @file syntax
+    require 'tempfile'
+    tmp = Tempfile.new(["gitlab_release_", ".json"])
+    begin
+        tmp.write(release_data)
+        tmp.flush
+        response = sh("curl --silent --header 'Content-Type: application/json' --header 'PRIVATE-TOKEN: #{gitlab_token}' \
+            --data @#{tmp.path} \
+            --request POST '#{api_url}'")
+    ensure
+        tmp.close!
+    end
 
     # Output the GitLab API response for debugging purposes.
     puts "📢 GitLab API Response: #{response}"
@@ -404,6 +423,21 @@ lane :publish_to_github do
     # This lane publishes the built SDK to GitHub Packages.
     # It uses the 'gradle' action to execute the 'publishAllPublicationsToGitHubPackagesRepository' Gradle task.
      gradle(task: ":network:publishAllPublicationsToGitHubPackagesRepository")
+end
+
+desc "Creates and uploads XCFramework for Swift Package Manager"
+lane :build_xcframework do
+    UI.message("🔨 Building XCFramework for Swift Package Manager...")
+    
+    # Build the XCFramework
+    gradle(task: ":network:createXCFramework")
+    
+    # Package it as zip with checksum
+    gradle(task: ":network:packageXCFramework")
+    
+    UI.success("✅ XCFramework created and packaged successfully!")
+    UI.message("📁 XCFramework location: network/build/distributions/PaydockNetworking.xcframework.zip")
+    UI.message("📝 Remember to update the checksum in Package.swift")
 end
 
 desc "Publishes the SDK to Maven Central using JReleaser"

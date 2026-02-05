@@ -2,18 +2,23 @@
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.internal.impldep.org.joda.time.LocalDateTime
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.cocoapods)
     alias(libs.plugins.kover) // Test coverage
     // linting
     id("detekt-convention")
     // publishing
     id("github-publish-convention")
+    // SPM plugin only when built standalone; when included as composite (e.g. by mobile-sdk-android),
+    // convention-plugins are not in scope so we skip it (SDK only needs Android artifact).
     id("maven-central-publish-convention")
+}
+if (gradle.parent == null) {
+    apply(plugin = "spm-publish-convention")
 }
 
 val versionName: String by project
@@ -22,21 +27,19 @@ val projectDescription: String by project
 kotlin {
     applyDefaultHierarchyTemplate()
     androidTarget {
-        publishLibraryVariants("release")
+        publishLibraryVariants("release", "debug")
     }
     iosX64()
     iosArm64()
     iosSimulatorArm64()
 
-    cocoapods {
-        summary = projectDescription
-        homepage = "https://github.com/PayDock/ios-mobile-sdk"
-        version = versionName
-        ios.deploymentTarget = "18.0"
-        framework {
-            baseName = "network"
-            binaryOption("bundleId", "com.paydock.core.$baseName")
+    // SPM Configuration - XCFramework generation
+    targets.withType<KotlinNativeTarget> {
+        binaries.framework {
+            baseName = "PaydockNetworking"
             isStatic = true
+            // Configure for iOS deployment target
+            freeCompilerArgs += listOf("-Xbinary=bundleId=com.paydock.core.network")
         }
     }
 
@@ -109,6 +112,9 @@ android {
         minSdk = 24
     }
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -120,6 +126,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Ensure we're using system Java when toolchain isn't available
+        isCoreLibraryDesugaringEnabled = false
     }
     testOptions {
         unitTests {
@@ -138,12 +146,15 @@ android {
 }
 
 // Ensure consistent JVM targets between Java and Kotlin
-kotlin {
-    jvmToolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-        // Enable toolchain auto-download for CI environments
-        vendor.set(JvmVendorSpec.ADOPTIUM)
+// Use conditional toolchain configuration to avoid CI failures
+if (System.getenv("CI") == null) {
+    // Local development: use toolchain for consistency
+    kotlin {
+        jvmToolchain(17)
     }
+} else {
+    // CI environment: skip toolchain to avoid Foojay service issues
+    logger.info("CI environment detected, skipping Java toolchain configuration")
 }
 
 // Kover configuration for test coverage

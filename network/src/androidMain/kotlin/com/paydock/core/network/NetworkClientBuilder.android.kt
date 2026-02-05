@@ -20,6 +20,7 @@ import io.ktor.serialization.kotlinx.json.json
 import okhttp3.CertificatePinner
 import okhttp3.Interceptor
 import okhttp3.logging.HttpLoggingInterceptor
+import java.net.URL
 import java.util.concurrent.TimeUnit
 
 /**
@@ -100,17 +101,28 @@ internal class AndroidNetworkClientBuilder : NetworkClientBuilder() {
 
     /**
      * Creates and configures the OkHttp engine for the network client.
+     * hostnameVerifier and certificatePinner only affect SSL/TLS verification after the TCP
+     * connection is established. java.net.ConnectException (e.g. "Failed to connect to ... :443")
+     * is a TCP-level failure (connection refused, network unreachable, IPv6/IPv4 issues) and is
+     * not caused by these settings.
      *
      * @param config The network configuration settings.
      * @return The configured [HttpClientEngine] instance.
      */
     private fun createHttpEngine(config: NetworkConfig): HttpClientEngine {
-        val certificatePinner: CertificatePinner? = config.sslPins?.let {
+        val expectedHost = try {
+            URL(config.baseUrl).host
+        } catch (e: Exception) {
+            null
+        }
+        val certificatePinner: CertificatePinner? = if (!config.sslPins.isNullOrEmpty() && expectedHost != null) {
             CertificatePinner.Builder().apply {
                 config.sslPins.forEach { pin ->
-                    add(config.baseUrl, pin)
+                    add(expectedHost, pin)
                 }
             }.build()
+        } else {
+            null
         }
         return OkHttp.create {
             config {
@@ -119,7 +131,6 @@ internal class AndroidNetworkClientBuilder : NetworkClientBuilder() {
                 writeTimeout(config.responseTimeout.toLong(), TimeUnit.SECONDS)
                 retryOnConnectionFailure(true)
                 certificatePinner?.let { certificatePinner(it) }
-                hostnameVerifier { hostname, _ -> hostname == config.baseUrl }
                 addInterceptor(ApiErrorInterceptor())
                 interceptors.forEach { addInterceptor(it) }
                 addInterceptor(

@@ -272,12 +272,18 @@ publish_to_github:
 # It runs after the tag has been created and uses JReleaser for complete automation.
 publish_to_maven_central:
   stage: maven_central # Runs in the 'maven_central' stage.
-  extends: .setup_bundler # Extends the '.setup_bundler' template to set up the Ruby environment.
+  extends: 
+    - .setup_bundler # Extends the '.setup_bundler' template to set up the Ruby environment.
+    - .macos_saas_runners # Use macOS runners to build iOS artifacts
+  variables:
+    GRADLE_USER_HOME: .gradle
+    IOS_SIMULATOR_DEVICE: "iPhone 16 Pro"
   dependencies:
     - tag_release
   only:
     - release # Only runs when a commit is made to the 'release' branch.
   script:
+    - bundle exec fastlane create_xcframework  # Generate XCFramework for SPM
     - bundle exec fastlane publish_to_maven_central
   # This job handles:
   #   - Publishing artifacts to staging repository
@@ -290,5 +296,7 @@ publish_to_maven_central:
       # JReleaser output for debugging
     paths:
       - network/build/jreleaser/
+      - network/build/distributions/PaydockNetworking.xcframework.zip  # SPM XCFramework
+      - network/build/XCFrameworks/  # Debug XCFramework artifacts
     expire_in: 7 days
   allow_failure: false

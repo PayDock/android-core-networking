@@ -9,13 +9,13 @@
 <!-- Platform Support -->
 [![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin%20Multiplatform-KMP-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/docs/multiplatform.html)
 [![Android](https://img.shields.io/badge/Android-Supported-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
-[![iOS](https://img.shields.io/badge/iOS-Supported-000000?logo=apple&logoColor=white)](https://developer.apple.com/)
+[![iOS](https://img.shields.io/badge/iOS-SPM-000000?logo=apple&logoColor=white)](https://developer.apple.com/)
 
 <!-- Technical Specifications -->
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.20-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![minSdk](https://img.shields.io/badge/minSdk-24-blue)](https://developer.android.com/guide/topics/manifest/uses-sdk-element)
-[![compileSdk](https://img.shields.io/badge/compileSdk-34-3DDC84)](https://developer.android.com/studio/releases/platforms)
+[![compileSdk](https://img.shields.io/badge/compileSdk-36-3DDC84)](https://developer.android.com/studio/releases/platforms)
 [![iOS Target](https://img.shields.io/badge/iOS%20target-18.0-000000)](https://kotlinlang.org/docs/native-cocoapods.html)
 
 # Network Module for Kotlin Multiplatform (KMP)
@@ -27,6 +27,7 @@ A versatile and robust networking module for Kotlin Multiplatform (KMP) projects
 - **Cross-Platform Support**: Compatible with both Android and iOS.
 - **Ktor Integration**: Utilizes Ktor for HTTP client functionality.
 - **Platform-Specific Engines**: OkHttp for Android and Darwin for iOS.
+- **WebSocket Support**: Full-featured WebSocket client with auto-reconnect.
 - **SSL Pinning**: Ensures secure connections with configurable SSL pins.
 - **Custom Interceptors**: Easily add custom interceptors for Android.
 - **Flexible Configuration**: Dynamic HTTP client engine creation.
@@ -34,18 +35,46 @@ A versatile and robust networking module for Kotlin Multiplatform (KMP) projects
 
 ## Compatibility
 
-**Current Version (1.4.0+):**
-- Kotlin: 2.2.20
-- Android Gradle Plugin: 8.13.0
-- Gradle: 8.14.3
-- Android: minSdk 24, compileSdk 36
-- iOS: deployment target 18.0
+**Current Version:**
+- Kotlin: 2.2.20+
+- Android Gradle Plugin: 8.13.0+
+- Gradle: 8.14.3+
+- Android: minSdk 24, compileSdk 36+
+- iOS: deployment target 18.0+
 
 > 💡 **For compatibility with previous versions**, see the [CHANGELOG.md](CHANGELOG.md) for version-specific requirements. We recommend staying within 1-2 minor versions of the latest release for optimal compatibility and security updates.
 
 ## Installation
 
-### Maven Central (Recommended)
+### iOS - Swift Package Manager (Recommended)
+
+Add the package to your iOS project using Xcode or Package.swift:
+
+#### Via Xcode:
+1. Open your iOS project in Xcode
+2. Go to **File → Add Package Dependencies**
+3. Enter the repository URL: `https://github.com/PayDock/android-core-networking`
+4. Select the desired version (latest recommended)
+5. Add to your target
+
+#### Via Package.swift:
+```swift
+dependencies: [
+    .package(
+        url: "https://github.com/PayDock/android-core-networking", 
+        from: "1.0.0"
+    )
+]
+```
+
+Then import in your Swift code:
+```swift
+import PaydockNetworking
+```
+
+> **⚠️ Breaking Change**: If migrating from CocoaPods, update your imports from `import network` to `import PaydockNetworking`
+
+### Android/KMP - Maven Central (Recommended)
 
 1. Ensure `mavenCentral()` is in your repositories (usually default):
 
@@ -103,7 +132,36 @@ Note: No ProGuard/R8 rules are required for this library.
 
 ## Usage
 
-### Building an HTTP Client
+### iOS - Swift Integration
+
+Import and use the networking module in your Swift code:
+
+```swift
+import PaydockNetworking
+
+// Create HTTP client
+let builder = NetworkClientBuilder.create()
+builder.setBaseUrl("https://api.paydock.com")
+builder.setDebug(true) // Enable for development builds
+let httpClient = builder.build()
+
+// Make network requests
+Task {
+    do {
+        let response = try await httpClient.get(url: "/v1/example")
+        // Handle success
+        print("Response: \(response)")
+    } catch let error as ApiException {
+        // Handle API errors
+        print("API Error: \(error.message)")
+    } catch {
+        // Handle other errors
+        print("Network Error: \(error)")
+    }
+}
+```
+
+### Android/KMP - Kotlin Integration
 
 Use the `NetworkClientBuilder` to build an instance of `HttpClient`:
 
@@ -138,6 +196,26 @@ runBlocking {
 }
 ```
 
+
+### iOS: Add authentication header
+
+```swift
+import PaydockNetworking
+
+// Create client with authentication
+let builder = NetworkClientBuilder.create()
+builder.setBaseUrl("https://api.paydock.com")
+// Note: iOS authentication is typically handled via request headers
+// Add authentication token to individual requests or use interceptors
+let httpClient = builder.build()
+
+// Add auth header to requests
+Task {
+    let response = try await httpClient.get(url: "/v1/secure-endpoint") { request in
+        request.headers.append("Authorization", "Bearer <your_token>")
+    }
+}
+```
 
 ### Android: Add authentication header
 
@@ -204,6 +282,158 @@ val httpClient = NetworkClientBuilder.create()
     .setBaseUrl("example.com")
     .setMockEngine(mockEngine)
     .build()
+```
+
+## WebSocket Support
+
+The networking module provides full-featured WebSocket support with automatic reconnection, ping/pong handling, and Flow-based message streaming.
+
+### Basic WebSocket Usage
+
+```kotlin
+import com.paydock.core.network.websocket.WebSocketClientBuilder
+import com.paydock.core.network.websocket.WebSocketMessage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+// Create WebSocket client
+val scope = CoroutineScope(Dispatchers.IO)
+val wsClient = WebSocketClientBuilder.create()
+    .setUrl("wss://example.com/ws")
+    .addHeader("Authorization", "Bearer token123")
+    .setPingInterval(30_000) // 30 seconds
+    .setTimeout(60_000) // 60 seconds
+    .build(scope)
+
+// Connect to WebSocket
+scope.launch {
+    wsClient.connect()
+}
+
+// Observe messages
+scope.launch {
+    wsClient.observeMessages().collect { message ->
+        when (message) {
+            is WebSocketMessage.Text -> println("Received: ${message.content}")
+            is WebSocketMessage.Binary -> println("Received binary: ${message.data.size} bytes")
+        }
+    }
+}
+
+// Send messages
+scope.launch {
+    wsClient.send("Hello, WebSocket!")
+}
+
+// Disconnect
+scope.launch {
+    wsClient.disconnect()
+}
+```
+
+### WebSocket with Auto-Reconnect
+
+```kotlin
+val wsClient = WebSocketClientBuilder.create()
+    .setUrl("wss://example.com/ws")
+    .setReconnectOnFailure(true)
+    .setMaxReconnectAttempts(5)
+    .setReconnectDelay(5_000) // 5 seconds between attempts
+    .build(scope)
+
+// Observe connection events
+scope.launch {
+    wsClient.observeEvents().collect { event ->
+        when (event) {
+            is WebSocketEvent.Connected -> println("WebSocket connected")
+            is WebSocketEvent.Disconnected -> println("Disconnected: ${event.reason}")
+            is WebSocketEvent.Error -> println("Error: ${event.error}")
+            is WebSocketEvent.Reconnecting -> println("Reconnecting (attempt ${event.attempt})...")
+        }
+    }
+}
+```
+
+### WebSocket State Monitoring
+
+```kotlin
+import com.paydock.core.network.websocket.WebSocketState
+
+scope.launch {
+    wsClient.state.collect { state ->
+        when (state) {
+            WebSocketState.DISCONNECTED -> println("WebSocket disconnected")
+            WebSocketState.CONNECTING -> println("WebSocket connecting...")
+            WebSocketState.CONNECTED -> println("WebSocket connected")
+            WebSocketState.CLOSING -> println("WebSocket closing...")
+            WebSocketState.FAILED -> println("WebSocket connection failed")
+        }
+    }
+}
+```
+
+### iOS - Swift WebSocket Usage
+
+```swift
+import PaydockNetworking
+import Combine
+
+// Create WebSocket client
+let builder = WebSocketClientBuilder.create()
+builder.setUrl("wss://example.com/ws")
+builder.addHeader("Authorization", "Bearer token123")
+builder.setPingInterval(30_000)
+
+let wsClient = builder.build(scope: yourCoroutineScope)
+
+// Connect
+Task {
+    try await wsClient.connect()
+}
+
+// Observe messages
+Task {
+    for await message in wsClient.observeMessages() {
+        if let textMessage = message as? WebSocketMessageText {
+            print("Received: \(textMessage.content)")
+        }
+    }
+}
+
+// Send message
+Task {
+    try await wsClient.send("Hello, WebSocket!")
+}
+```
+
+### WebSocket Configuration Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `url` | WebSocket URL (ws:// or wss://) | Required |
+| `headers` | Custom headers for handshake | Empty |
+| `pingIntervalMs` | Interval for ping frames | 30,000ms (30s) |
+| `timeoutMs` | Connection/operation timeout | 30,000ms (30s) |
+| `maxFrameSize` | Maximum WebSocket frame size | 1,048,576 bytes (1MB) |
+| `reconnectOnFailure` | Auto-reconnect on failure | false |
+| `maxReconnectAttempts` | Max reconnection attempts | 3 |
+| `reconnectDelayMs` | Delay between reconnects | 5,000ms (5s) |
+
+### WebSocket Error Handling
+
+```kotlin
+import com.paydock.core.network.exceptions.WebSocketException
+
+try {
+    wsClient.connect()
+} catch (e: WebSocketException.ConnectionFailedException) {
+    println("Failed to connect: ${e.message}")
+} catch (e: WebSocketException.NotConnectedException) {
+    println("WebSocket not connected")
+} catch (e: WebSocketException.SendFailedException) {
+    println("Failed to send message: ${e.message}")
+}
 ```
 
 ## Changelog
