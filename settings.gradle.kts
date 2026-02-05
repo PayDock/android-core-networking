@@ -8,10 +8,9 @@ pluginManagement {
 }
 
 plugins {
-    // Auto-download Java toolchains when required version is missing
-    // Prevents CI failures when Java 17 isn't pre-installed
-    // Uses Foojay DiscoAPI to resolve and download JDK distributions
-    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+    // Disable automatic Java toolchain resolution to avoid Foojay service failures
+    // CI environments should have Java pre-installed
+    // id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
 dependencyResolutionManagement {

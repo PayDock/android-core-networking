@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.5.0] - 2025-02-05
+
+### Added
+- **WebSocket Support**: Full-featured WebSocket client with auto-reconnect capabilities
+  - Cross-platform WebSocket support for Android and iOS
+  - Flow-based message streaming and state monitoring
+  - Configurable ping/pong handling and timeouts
+  - Automatic reconnection with customizable retry logic
+  - Comprehensive WebSocket exception handling with specific error types
+- **Enhanced Error Handling**: New WebSocketException hierarchy for better error management
+- **Swift Package Manager Support**: Complete migration from CocoaPods to SPM for iOS distribution
+  - XCFramework generation and packaging
+  - GitHub-based SPM distribution
+  - Improved iOS integration workflow
+
+### Changed
+- **Breaking Change - iOS**: Import statement changed from `import network` to `import PaydockNetworking`
+- **Platform Updates**: Updated iOS deployment target from 16.0 → 18.0
+- **Build System**: Updated Android compileSdk from 34 → 36 (minSdk remains 24)
+- **Dependency Management**: Improved API vs implementation dependency separation
+- **Documentation**: Enhanced README with comprehensive WebSocket usage examples
+
+### Removed
+- **CocoaPods Support**: Removed CocoaPods configuration in favor of Swift Package Manager
+
+### Migration Guide
+- **iOS Projects**: Update import statements from `import network` to `import PaydockNetworking`
+- **iOS Package Manager**: Switch from CocoaPods to Swift Package Manager using GitHub repository
+- **Existing HTTP Clients**: No changes required - all existing functionality remains compatible
+
 ## [1.4.0] - 2025-09-25
 
 ### Changed
